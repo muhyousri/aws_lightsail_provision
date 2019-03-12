@@ -1,0 +1,13 @@
+{
+    "Version": "2012-10-17",
+    "Id": "Policy1550758033785",
+    "Statement": [
+        {
+            "Sid": "Stmt1550758023714",
+            "Effect": "Allow",
+            "Principal": "*",
+            "Action": "s3:GetObject",
+            "Resource": "arn:aws:s3:::exalight1/*"
+        }
+    ]
+}
