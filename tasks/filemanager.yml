@@ -1,0 +1,79 @@
+---
+
+
+#- name: Download Vesta 
+#  get_url:
+#    url=http://vestacp.com/pub/vst-install.sh
+#    dest=/tmp/vst-install.sh
+
+#- name: Intall Vesta 
+#  command: bash vst-install.sh  -f --nginx no --apache yes --phpfpm no --named yes --remi yes --vsftpd yes --proftpd no --iptables yes --fail2ban yes --quota no --exim yes --dovecot yes --spamassassin yes --clamav yes --softaculous yes --mysql yes --postgresql no -y no
+#  args:
+#    chdir: /tmp
+#  become: yes
+
+
+
+#- name: update path
+#  shell: echo "PATH=$PATH:/usr/local/vesta/bin/" > /etc/environment
+#  become: true
+ 
+#- name: Find out playbook's path
+#  shell:  env | grep $PATH
+#  register: playbook_path_output
+#
+#- debug: 
+#  debug: var=playbook_path_output.stdout
+
+#- name: add new user 
+#  command:  v-add-user {{ id }} {{  root_passwd  }} {{ email }}
+#  become: yes
+#
+#
+#- name: add new domain 
+#  command:  v-add-domain {{ id }} {{ domain }}
+#  become: yes
+#
+#
+#
+- name: Download Filemanager
+  get_url: 
+    url=http://extplorer.net/attachments/download/78/eXtplorer_2.1.12.zip
+    dest=/tmp/eXtplorer_2.1.12.zip
+    validate_certs=no 
+
+
+- name: create subdirectory public_html
+  shell: mkdir /opt/bitnami/apps/wordpress/htdocs/filemanager
+  become: yes
+
+
+- name: Extract Filemanager
+  become: yes
+  unarchive: src=/tmp/eXtplorer_2.1.12.zip dest=/opt/bitnami/apps/wordpress/htdocs/filemanager    copy=no
+
+
+
+- name: "Change file ownership, group and mode"
+  shell: find /opt/bitnami/apps/wordpress/htdocs/filemanager -type d -exec chmod 0777 {} \; && find /opt/bitnami/apps/wordpress/htdocs/filemanager -type f -exec chmod 0777 {} \;
+  become: yes
+#
+- name: "change ownership"
+  file:
+    path:  /opt/bitnami/apps/wordpress/htdocs/filemanager
+    state: directory
+    mode:  0777
+    owner: bitnami
+    group: daemon
+    recurse: yes
+  become: yes
+
+- name: Update users config file
+  template:
+    src: htuser.j2
+    dest: /opt/bitnami/apps/wordpress/htdocs/filemanager/config/.htusers.php
+    owner: bitnami
+    group: daemon
+  become: yes
+
+

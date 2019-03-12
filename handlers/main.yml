@@ -1,0 +1,14 @@
+
+---
+- name: restart apache2
+  shell: /opt/bitnami/ctlscript.sh restart apache
+  become: yes
+
+- name: restart httpd
+  service: name=httpd state=restarted enabled=yes
+
+
+- name: restart ssh
+  service: name=sshd state=restarted enabled=yes
+  become: yes
+

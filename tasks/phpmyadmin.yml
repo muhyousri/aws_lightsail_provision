@@ -1,0 +1,10 @@
+---
+- name: configure PHPMYadmin to point to RDS instance
+  template: src=config.inc.php.j2 dest=/opt/bitnami/apps/phpmyadmin/htdocs/config.inc.php owner=root group=root
+  become: yes
+  
+
+- name: configure phpmyadmin for remote access
+  copy: src=httpd-app.conf dest=/opt/bitnami/apps/phpmyadmin/conf/httpd-app.conf  owner=bitnami group=root
+  become: yes
+  notify: restart apache2

@@ -1,0 +1,78 @@
+---
+
+- name: Download WordPress-cli
+  get_url: 
+    url: https://raw.githubusercontent.com/wp-cli/builds/gh-pages/phar/wp-cli.phar 
+    dest: /tmp/wp-cli.phar
+
+- name: Set permission on wp-script
+  become: yes
+  file:
+    path: /tmp/wp-cli.phar
+    mode:  0755
+- name: copy to bin
+  shell: mv /tmp/wp-cli.phar /usr/local/bin/wp 
+  become: yes
+
+- name: install wp-offload
+  shell: wp plugin install amazon-s3-and-cloudfront --allow-root
+  become: yes
+
+- name: activate  wp-offload
+  shell: wp plugin activate amazon-s3-and-cloudfront --allow-root
+  become: yes
+
+- name: get wordpress admin and db admin
+  shell: cat /home/bitnami/bitnami_application_password 
+  register: db_password
+  when: inventory_hostname == "{{ id }}_inst1"
+
+- name: Install MySQL python module
+  apt: name=python3-mysqldb update_cache=yes cache_valid_time=3600 state=present
+  become: yes
+  when: inventory_hostname == "{{ id }}_inst1"
+
+- name: dump default wordpress database
+  shell: mysqldump -uroot -p{{db_password.stdout}} bitnami_wordpress  > /home/bitnami/backup.sql
+  when: inventory_hostname == "{{ id }}_inst1"
+
+- name: get database dump file
+  fetch:
+    src: /home/bitnami/bitnami_application_password
+    dest: /home/bitnami_password
+  when: inventory_hostname == "{{ id }}_inst1"
+
+- name: correct wordpress URL
+  shell: sed -i 's/127.0.0.1\/wordpress/{{ web_endpoint }}/g' /home/bitnami/backup.sql
+  when: inventory_hostname == "{{ id }}_inst1"
+
+- name: import dump to rds instance
+  mysql_db:
+   state: import
+   name: "{{ db_name }}"
+   target: /home/bitnami/backup.sql
+   login_host: "{{ rds_endpoint }}"
+   login_password: "{{ mysql_root_passwd }}"
+   login_user: root
+  when: inventory_hostname == "{{ id }}_inst1"
+
+- name: Update WordPress config file
+  template:
+    src: wp-config.php.j2
+    dest: /opt/bitnami/apps/wordpress/htdocs/wp-config.php
+    owner: bitnami
+    group: daemon
+  become: yes
+
+- name: Update WordPress setting wth iam 
+  template:
+    src: wp-settings.php.j2
+    dest: /opt/bitnami/apps/wordpress/htdocs/wp-settings.php
+    owner: bitnami
+    group: daemon
+  become: yes
+
+- name: disable bitnami's banner 
+  shell: /opt/bitnami/apps/wordpress/bnconfig --disable_banner 1
+  notify: restart apache2
+  become: yes

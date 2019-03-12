@@ -1,0 +1,26 @@
+# OS X
+.DS_Store*
+Icon?
+._*
+
+# Editor
+*.swp
+
+# Logs
+logs
+*.log
+npm-debug.log*
+
+# Runtime data
+pids
+*.pid
+*.seed
+
+# Vagrant
+.vagrant/
+**/.vagrant/
+
+#Ansible
+*.pem
+*.retry
+hosts

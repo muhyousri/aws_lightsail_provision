@@ -1,0 +1,36 @@
+---
+# tasks file for wordpress
+- name: Download Wordpress
+  get_url: url=https://wordpress.org/latest.tar.gz dest=/tmp/wordpress.tar.gz validate_certs=no
+  become_user: yes
+
+- name: Extract Wordpress
+  become: yes
+  #unarchive: src=/tmp/wordpress.tar.gz dest=/var/www/ copy=no
+  shell: >
+    sudo tar -xvzf /tmp/wordpress.tar.gz -C /var/www/html
+
+- name: Update default Apache site
+  become: yes
+  lineinfile:
+    dest=/etc/apache2/sites-available/000-default.conf
+    regexp="(.)+DocumentRoot /var/www/html"
+    line="DocumentRoot /var/www/wordpress"
+  notify:
+    - restart apache
+
+- name: Copy sample config file
+  become: yes
+  command: mv /var/www/html/wordpress/wp-config-sample.php /var/www/html/wordpress/wp-config.php creates=/var/www/html/wordpress/wp-config.php
+
+
+- name: Update WordPress config file
+  become: yes
+  lineinfile:
+    dest=/var/www/html/wordpress/wp-config.php
+    regexp="{{ item.regexp }}"
+    line="{{ item.line }}"
+  with_items:
+    - {'regexp': "define\\('DB_NAME', '(.)+'\\);", 'line': "define('DB_NAME', '{{wp_mysql_db}}');"}
+    - {'regexp': "define\\('DB_USER', '(.)+'\\);", 'line': "define('DB_USER', '{{wp_mysql_user}}');"}
+    - {'regexp': "define\\('DB_PASSWORD', '(.)+'\\);", 'line': "define('DB_PASSWORD', '{{wp_mysql_password}}');"}

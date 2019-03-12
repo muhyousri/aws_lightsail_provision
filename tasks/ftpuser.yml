@@ -1,0 +1,35 @@
+---
+
+- name: add ftp group
+  group:
+    name: ftp-users
+    state: present
+  become: yes
+
+- name: add user
+  user:
+    name: ftp-user
+    group: ftp-users
+  become: yes
+
+- name: install acl for permissions 
+  apt:
+    name: acl
+    state: latest 
+  become: yee
+
+- name: Set  ftp-user password
+  shell: echo ftp-user:{{ ftp_passwd }} | sudo chpasswd
+  become: yes
+
+- name: mount web directory to ftp-user
+  command: usermod ftp-user -d /opt/bitnami/apps/wordpress/htdocs
+  become: yes
+
+- name: give ftp-user access to web directory
+  command: setfacl -R -m  u:ftp-user:rwx /opt/bitnami/apps/wordpress/htdocs
+  become: yes
+
+
+  
+

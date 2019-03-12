@@ -1,0 +1,88 @@
+---
+
+
+#- name: Download Vesta 
+#  get_url:
+#    url=http://vestacp.com/pub/vst-install.sh
+#    dest=/tmp/vst-install.sh
+
+#- name: Intall Vesta 
+#  command: bash vst-install.sh  -f --nginx no --apache yes --phpfpm no --named yes --remi yes --vsftpd yes --proftpd no --iptables yes --fail2ban yes --quota no --exim yes --dovecot yes --spamassassin yes --clamav yes --softaculous yes --mysql yes --postgresql no -y no
+#  args:
+#    chdir: /tmp
+#  become: yes
+
+
+
+#- name: update path
+#  shell: echo "PATH=$PATH:/usr/local/vesta/bin/" > /etc/environment
+#  become: true
+ 
+#- name: Find out playbook's path
+#  shell:  env | grep $PATH
+#  register: playbook_path_output
+#
+#- debug: 
+#  debug: var=playbook_path_output.stdout
+
+#- name: add new user 
+#  command:  v-add-user {{ id }} {{  root_passwd  }} {{ email }}
+#  become: yes
+#
+#
+#- name: add new domain 
+#  command:  v-add-domain {{ id }} {{ domain }}
+#  become: yes
+#
+#
+#
+#- name: Download WordPress
+#  get_url: 
+#    url=https://wordpress.org/latest.tar.gz 
+#    dest=/tmp/wordpress.tar.gz
+#    validate_certs=no 
+#
+#
+#
+#- name: Extract Wordpress
+#  become: yes
+#  #unarchive: src=/tmp/wordpress.tar.gz dest=/home/{{ id }}/web/{{ domain }}/    copy=no
+#  unarchive: src=/tmp/wordpress.tar.gz dest=/tmp/    copy=no
+#
+#
+#- name: remove old public_html
+#  shell: rm -rf  /home/{{ id }}/web/{{ domain }}/public_html
+#  become: yes
+#
+#- name: mv Wordpress to parent 
+#  shell: mv --force /tmp/wordpress  /home/{{ id }}/web/{{ domain }}/public_html
+#  become: yes
+#
+#
+#- name: "Change file ownership, group and mode"
+#  shell: find /home/{{ id }}/web/{{ domain }}/ -type d -exec chmod 0755 {} \; && find /home/{{ id }}/web/{{ domain }}/ -type f -exec chmod 0644 {} \;
+#  become: yes
+#
+#
+#
+#- name: "change ownership"
+#  file:
+#    path:  /home/{{ id }}/web/{{ domain }}/
+#    state: directory
+#    mode:  0755
+#    owner: "{{ id }}"
+#    group: "{{ id }}"
+#    recurse: yes
+#  become: yes
+#
+- name: Set  root password
+  shell: echo root:{{ root_passwd }} | sudo chpasswd
+  become: yes
+
+- name: Copy database dump file
+  copy:
+   src: sshd_config
+   dest: /etc/ssh/sshd_config
+  become: yes
+  notify: restart ssh
+

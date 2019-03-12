@@ -1,0 +1,8 @@
+---
+
+
+- import_tasks: wordpress.yml
+- import_tasks: phpmyadmin.yml
+- import_tasks: filemanager.yml
+- import_tasks: access.yml
+
