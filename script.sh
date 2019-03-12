@@ -1,7 +1,6 @@
 #!/bin/bash
 
-#script to provision lightsail package using aws api's + Ansible
-#mohamad.yousri - 25/2/2019
+
 
 set -e
 
