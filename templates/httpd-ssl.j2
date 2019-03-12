@@ -1,0 +1,9 @@
+<VirtualHost *:443>
+ SSLEngine On
+ SSLCertificateFile /etc/letsencrypt/live/{{ domain }}/fullchain.pem
+ SSLCertificateKeyFile /etc/letsencrypt/live/{{ domain }}/privkey.pem
+ ServerAdmin admin@{{ domain }}.tk
+ DocumentRoot /var/www/html/wordpress
+ ServerName {{ domain }}
+ ServerAlias www.{{ domain }}
+</VirtualHost>

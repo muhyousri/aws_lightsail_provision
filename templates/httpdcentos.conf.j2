@@ -1,0 +1,12 @@
+<VirtualHost *:80>
+ ServerAdmin admin@{{ domain }}
+ DocumentRoot /var/www/html/wordpress/
+ ServerName {{ domain }}
+ ServerAlias www.{{ domain }}
+<Directory /var/www/html/wordpress/>
+ Options FollowSymLinks
+ AllowOverride All
+</Directory>
+</VirtualHost>
+
+
