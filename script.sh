@@ -40,13 +40,18 @@ ftp_hash=`echo $ftp_password |  openssl md5 | awk -F '= ' '{print $2}'`
 
 id=`echo "$domain" | awk -F '.' '{print $1 $2}' | sed 's/\-//g'`
 hostname=$id
+date=`date`
 
 #Instances
 
 ##create
 echo " creating instances ,, "
 aws lightsail create-instances  --instance-names "$domain"_inst1 --availability-zone us-east-1a --bundle-id nano_2_0 --blueprint-id wordpress_4_9_8 --user-data file://'/usr/bin/userdata.sh'  > /dev/null
+aws lightsail tag-resource --resource-name "$domain"_inst1 --tags key=client,value="$domain"  > /dev/null
+aws lightsail tag-resource --resource-name "$domain"_inst1 --tags key=creation_date,value="$date" > /dev/null
 aws lightsail create-instances  --instance-names "$domain"_inst2 --availability-zone us-east-1a --bundle-id nano_2_0 --blueprint-id wordpress_4_9_8 --user-data file://'/usr/bin/userdata.sh'  > /dev/null
+aws lightsail tag-resource --resource-name "$domain"_inst2 --tags key=client,value="$domain" > /dev/null
+aws lightsail tag-resource --resource-name "$domain"_inst2 --tags key=creation_date,value="$date" > /dev/null
 #Allocate_static_ip
 echo " Allocate Static IPs .. "
 aws lightsail allocate-static-ip --static-ip-name "$domain"_ip1 > /dev/null
@@ -73,21 +78,28 @@ aws ec2 authorize-security-group-ingress --group-id $sg_id --protocol tcp --port
 
 
 #RDS 
+
 echo " Creating RDS instance ,,it will take about 5 minutes "
 
 db_name="$id"db
 rds_name="$id"rds
 aws rds create-db-instance --db-name "$id"db --db-instance-identifier  "$id"rds --allocated-storage 20 --db-instance-class db.t2.micro --engine mysql --master-username root --master-user-password $mysql_root_passwd --vpc-security-group-ids $sg_id --availability-zone us-east-1a > /dev/null
-sleep 350
+#sleep 350
+echo "Checking for DB instance ... still creating "
 dbstatus=`aws rds describe-db-instances --db-instance-identifier "$id"rds | jq -r .DBInstances[].DBInstanceStatus`
 while  [ "$dbstatus" != "available" ]  ; do
 dbstatus=`aws rds describe-db-instances --db-instance-identifier "$id"rds | jq -r .DBInstances[].DBInstanceStatus`
-echo "Checking for DB instance ... still creating "
-sleep 10
+sleep 2
 done
 echo "Checking for DB instance ... Done!"
-sleep 5
-rds_endpoint=$rds_name".c9hbae3b9azs.us-east-1.rds.amazonaws.com"
+rds_endpoint=`aws rds describe-db-instances --db-instance-identifier "$id"rds | jq -r .DBInstances[].Endpoint.Address`
+#rds_endpoint=$rds_name".c9hbae3b9azs.us-east-1.rds.amazonaws.com"
+aws_arn=`aws rds describe-db-instances --db-instance-identifier "$id"rds | jq -r .DBInstances[].DBInstanceArn`
+aws rds add-tags-to-resource --resource-name $aws_arn --tags Key=client,Value="$domain" > /dev/null
+aws rds add-tags-to-resource --resource-name $aws_arn --tags Key=creation_date,Value="$date" > /dev/null
+
+
+
 
 #Attach_Static_IP
 
@@ -113,7 +125,8 @@ aws elbv2 modify-target-group-attributes --target-group-arn  $tg_arn --attribute
 aws elbv2 register-targets --target-group-arn $tg_arn --targets Id=$localip1,AvailabilityZone=all Id=$localip2,AvailabilityZone=all > /dev/null
 aws elbv2 create-listener --load-balancer-arn $lb_arn --protocol HTTP --port 80 --default-actions Type=forward,TargetGroupArn=$tg_arn > /dev/null
 dns=`aws elbv2 describe-load-balancers --names "$id"-lb | jq -r .LoadBalancers[].DNSName`
-
+aws elbv2 add-tags --resource-arns $lb_arn --tags Key=client,Value="$domain" > /dev/null
+aws elbv2 add-tags --resource-arns $lb_arn --tags Key=creation_date,Value="$date" > /dev/null
 
 
 # S3
@@ -125,7 +138,7 @@ aws s3api create-bucket --bucket $s3 --region us-east-1 > /dev/null
 cp /usr/bin/s3policy.json /usr/bin/s3policy_"$id".json
 sed -i "s/exalight1/${s3}/g" /usr/bin/s3policy_"$id".json
 aws s3api put-bucket-policy --bucket $s3 --policy file:///usr/bin/s3policy_"$id".json > /dev/null
-
+aws s3api put-bucket-tagging --bucket $s3 --tagging 'TagSet=[{Key=client,Value='$domain'}]' > /dev/null
 
 
 #IAM
@@ -142,6 +155,14 @@ cp /usr/bin/userpolicy.json /usr/bin/userpolicy_"$id".json
 sed -i "s/bucket1/${s3}/g" /usr/bin/userpolicy_"$id".json
 policy_arn=`aws iam create-policy --policy-name "$id"-policy --policy-document file:///usr/bin/userpolicy_"$id".json | jq -r .Policy.Arn`
 aws iam attach-user-policy --policy-arn $policy_arn --user-name $id"user" > /dev/null
+
+
+#cloudfront
+
+#echo "Configuring cloudfront ,,"
+#sleep 3
+#aws cloudfront create-distribution --origin-domain-name $s3.s3.amazonaws.com > /dev/null
+
 
 
 ###############
@@ -173,17 +194,17 @@ echo "ftp_passwd="$ftp_passwd  >> /home/ansible/hosts/lightsail
 echo "ftp_hash="$ftp_hash  >> /home/ansible/hosts/lightsail
 echo "root_hash="$root_hash  >> /home/ansible/hosts/lightsail
 echo "iam_secret="$iam_secret  >> /home/ansible/hosts/lightsail
-echo "iam_secret="$iam_access  >> /home/ansible/hosts/lightsail
+echo "iam_access="$iam_access  >> /home/ansible/hosts/lightsail
 echo "s3="$s3  >> /home/ansible/hosts/lightsail
 
 
 echo "Configuring Instances ,, "
 sleep 5
 ansible-playbook -i /home/ansible/hosts/lightsail /home/ansible/lightsail.yml 
-#ansible-playbook -i /home/ansible/hosts/lightsail /home/ansible/lightsail-slave.yml > /dev/null
 wordpressadmin=`cat /home/bitnami_password/"$id"_inst1/home/bitnami/bitnami_application_password`
 
 echo "WEB ENDPOINT is: " $dns
+echo "S3 Bucket name is: " $s3
 echo "wordpress password is: " $wordpressadmin
 echo "Attached static IP to instance 1 is: "$staticip1
 echo "Attached static IP to instance 2 is: "$staticip2

@@ -1,0 +1,93 @@
+---
+
+- name: install Lsyncd
+  apt: name=lsyncd state=present
+  become: yes
+
+- name: create directory for logs
+  file:
+    path: /var/log/lsyncd
+    owner: root
+    group: root
+    state: directory
+  become: yes
+
+- name: create directory for config
+  file:
+    path: /etc/lsyncd
+    owner: root
+    group: root
+    state: directory
+  become: yes
+- name: touch log file
+  file:
+    path: /var/log/lsyncd/lsyncd.log
+    owner: root
+    group: root
+    state: touch
+  become: yes
+
+- name: touch status file
+  file:
+    path: /var/log/lsyncd/lsyncd.status
+    owner: root
+    group: root
+    state: touch
+  become: yes
+
+- name: configure publickey for root
+  copy:
+    src: authorized_keys
+    dest: /root/.ssh/authorized_keys
+  become: yes
+
+- name: copy private key
+  copy:
+    src: sync.key
+    dest: /root/sync.key
+    mode: 0400
+  become: yes
+
+- name: configure inst1 to use private key 
+  template:
+    src: ssh_config.j2
+    dest: /etc/ssh/ssh_config
+  become: yes
+  when: inventory_hostname == "{{ id }}_inst1"
+
+- name: configure inst2 to use private key 
+  template:
+    src: ssh_config2.j2
+    dest: /etc/ssh/ssh_config
+  become: yes
+  when: inventory_hostname == "{{ id }}_inst2"
+
+
+- name: configure inst_1
+  template:
+    src: lsyncd.conf1.lua.j2
+    dest: /etc/lsyncd/lsyncd.conf.lua
+  become: yes
+  when: inventory_hostname == "{{ id }}_inst1"
+  notify: restart lsyncd
+
+- name: configure inst_2
+  template:
+    src: lsyncd.conf2.lua.j2
+    dest: /etc/lsyncd/lsyncd.conf.lua
+  become: yes
+  when: inventory_hostname == "{{ id }}_inst2"
+  notify: restart lsyncd
+
+me: Set  root password
+  shell: echo root:{{ root_passwd }} | sudo chpasswd
+  become: yes
+
+- name: Configure sshd
+  copy:
+   src: sshd_config
+   dest: /etc/ssh/sshd_config
+  become: yes
+  notify: restart ssh
+
+

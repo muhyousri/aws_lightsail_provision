@@ -1,0 +1,23 @@
+settings = {
+        logfile = "/var/log/lsyncd/lsyncd.log",
+        statusFile = "/var/log/lsyncd/lsyncd.status"
+}
+
+sync {
+        default.rsyncssh,
+        source = "/opt/bitnami/apps/wordpress/htdocs",
+        host = "{{ localip2 }}",
+        targetdir = "/opt/bitnami/apps/wordpress/htdocs",
+        exclude = { '/opt/bitnami/apps/wordpress/htdocs/wp-content/uploads/*' },
+rsync = {
+archive = true,
+owner = true,
+perms = true,
+group = true,
+compress = true,
+whole_file = true,
+}
+
+
+}
+

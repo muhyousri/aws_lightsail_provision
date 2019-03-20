@@ -1,0 +1,70 @@
+- name: install letsencrypt
+  yum:
+    name: letsencrypt
+    state: latest
+  when: ansible_os_family == "RedHat"
+
+
+- name: install letsencrypt
+  apt:
+    name: letsencrypt
+    state: latest
+  when: ansible_os_family == "Debian"
+
+- name: install cronie
+  yum:
+    name: cronie
+    state: latest
+  when: ansible_os_family == "RedHat"
+
+- name: restart httpd
+  service: name=httpd state=restarted enabled=yes
+  when: ansible_os_family == "RedHat"
+
+- name: restart apache2
+  service: name=apache2 state=restarted enabled=yes
+  when: ansible_os_family == "Debian"
+
+- name: sign certificate 
+  command: letsencrypt -d {{ domain }} --webroot --webroot-path=/var/www/html/wordpress --agree-dev-preview --agree-tos  --email {{ email }} certonly -n
+  #ignore_errors: true
+
+
+
+- name: update htaccess
+  template:
+    src: htaccess.j2
+    dest: /var/www/html/wordpress/.htaccess
+    owner: apache
+    group: apache
+  when: ansible_os_family == "RedHat"
+
+
+- name: update htaccess
+  template:
+    src: htaccess.j2
+    dest: /var/www/html/wordpress/.htaccess
+    owner: www-data
+    group: www-data
+  when: ansible_os_family == "Debian"
+
+
+- name: configure webserver
+  template:
+    src: httpd-ssl.j2
+    dest: /etc/httpd/conf.d/{{domain}}-ssl.conf
+  notify: restart httpd
+  when: ansible_os_family == "RedHat"
+  
+- name: configure webserver
+  template:
+    src: httpd-ssl.j2
+    dest: /etc/apache2/sites-enabled/{{domain}}-ssl.conf
+  notify: restart apache2
+  when: ansible_os_family == "Debian"
+
+- name: configure cron for auto-renewal
+  cron:
+    name: auto-renew
+    minute: "0"
+    job: sh letsencrypt -d {{ domain }} --webroot --webroot-path=/var/www/html/wordpress --agree-dev-preview --agree-tos  --email {{ email }} certonly -n

@@ -44,7 +44,9 @@
 
 
 - name: create subdirectory public_html
-  shell: mkdir /opt/bitnami/apps/wordpress/htdocs/filemanager
+  file: 
+    path: /opt/bitnami/apps/wordpress/htdocs/filemanager
+    state: directory
   become: yes
 
 

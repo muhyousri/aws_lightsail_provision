@@ -1,0 +1,39 @@
+
+
+- name: Download WordPress-cli
+  get_url:
+    url: https://raw.githubusercontent.com/wp-cli/builds/gh-pages/phar/wp-cli.phar
+    dest: /tmp/wp-cli.phar
+
+- name: Set permission on wp-script
+  become: yes
+  file:
+    path: /tmp/wp-cli.phar
+    mode:  0755
+- name: copy to bin
+  shell: mv /tmp/wp-cli.phar /usr/local/bin/wp
+  become: yes
+
+
+- name: Update ALL plugins
+  shell: wp plugin update --all --allow-root
+  become: yes
+
+- name: install wp-offload
+  shell: wp plugin install amazon-s3-and-cloudfront --allow-root
+  become: yes
+
+- name: activate  wp-offload
+  shell: wp plugin activate amazon-s3-and-cloudfront --allow-root
+  become: yes
+
+- name: configure wp-offload3
+  shell: wp option update _site_transient_as3cf_regions_cache 'a:1:{s:14:"{{ s3 }}";s:9:"us-east-1";}' --allow-root
+  become: yes
+- name: configure wp-offload1
+  shell: wp option update tantan_wordpress_s3  'a:7:{s:6:"bucket";s:14:"{{ s3 }}";s:10:"copy-to-s3";s:1:"1";s:11:"force-https";b:0;s:13:"manual_bucket";b:1;s:17:"post_meta_version";i:7;s:6:"region";s:0:"";s:13:"serve-from-s3";s:1:"1";}' --allow-root
+  become: yes
+- name: configure wp-offload2
+  shell: wp option update _site_transient_timeout_as3cf_regions_cache "1552459604" --allow-root
+  become: yes
+

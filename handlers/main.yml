@@ -12,3 +12,6 @@
   service: name=sshd state=restarted enabled=yes
   become: yes
 
+- name: restart lsyncd
+  service: name=lsyncd state=restarted enabled=yes
+  become: yes
