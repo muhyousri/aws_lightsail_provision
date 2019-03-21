@@ -21,18 +21,18 @@ read  mail
 #Generate Passwords#
 ####################
 
+
 #Generate Random string to use as mysql root password
 mysql_root_passwd=$(head -c 8  /dev/random | md5sum | cut -c1-10 )
 echo $(date)":"$hostname":Wordpress_Mysql:"$mysql_root_passwd >> /home/ansible/install_logs
  
 #Generate Random string to use as  root password
 root_passwd=$(head -c 8  /dev/random | md5sum | cut -c1-10 )
-root_hash=`echo $root_passwd |  md5sum | awk -F ' ' '{print $1}'`
+root_hash=`echo -n "$root_passwd" |  md5sum | awk -F ' ' '{print $1}'`
 
 #Generate Random string to use as  ftp-user password
 ftp_passwd=$(head -c 8  /dev/random | md5sum | cut -c1-10 )
-ftp_hash=`echo -n $ftp_password |  md5sum  | awk -F ' ' '{print $1}'`
-
+ftp_hash=`echo -n "$ftp_passwd" |  md5sum  | awk -F ' ' '{print $1}'`
 
 ###########
 #Provision#
@@ -42,18 +42,34 @@ id=`echo "$domain" | awk -F '.' '{print $1 $2}' | sed 's/\-//g'`
 hostname=$id
 date=`date`
 
-#Instances
+echo " Creating security group .. "
 
-##create
-echo " creating instances ,, "
+aws ec2  create-security-group --description domain"$domain" --group-name "$domain"_sg  --vpc-id vpc-502fa02b > /dev/null
+sg_id=`aws ec2 describe-security-groups --group-name "$domain"_sg | jq -r .SecurityGroups[].GroupId`
+
+
+
+echo " Creating RDS instance ..  "
+
+db_name="$id"db
+rds_name="$id"rds
+aws rds create-db-instance --db-name "$id"db --db-instance-identifier  "$id"rds --allocated-storage 20 --db-instance-class db.t2.micro --engine mysql --master-username root --master-user-password $mysql_root_passwd --vpc-security-group-ids $sg_id --availability-zone us-east-1a > /dev/null
+
+
+
+
+
+echo " Creating instances .. "
+
 aws lightsail create-instances  --instance-names "$domain"_inst1 --availability-zone us-east-1a --bundle-id nano_2_0 --blueprint-id wordpress_4_9_8 --user-data file://'/usr/bin/userdata.sh'  > /dev/null
 aws lightsail tag-resource --resource-name "$domain"_inst1 --tags key=client,value="$domain"  > /dev/null
 aws lightsail tag-resource --resource-name "$domain"_inst1 --tags key=creation_date,value="$date" > /dev/null
 aws lightsail create-instances  --instance-names "$domain"_inst2 --availability-zone us-east-1a --bundle-id nano_2_0 --blueprint-id wordpress_4_9_8 --user-data file://'/usr/bin/userdata.sh'  > /dev/null
 aws lightsail tag-resource --resource-name "$domain"_inst2 --tags key=client,value="$domain" > /dev/null
 aws lightsail tag-resource --resource-name "$domain"_inst2 --tags key=creation_date,value="$date" > /dev/null
-#Allocate_static_ip
+
 echo " Allocate Static IPs .. "
+
 aws lightsail allocate-static-ip --static-ip-name "$domain"_ip1 > /dev/null
 aws lightsail allocate-static-ip --static-ip-name "$domain"_ip2 > /dev/null
 ##get local ips
@@ -61,54 +77,50 @@ localip1=`aws lightsail get-instance --instance-name "$domain"_inst1 | jq -r .in
 localip2=`aws lightsail get-instance --instance-name "$domain"_inst2 | jq -r .instance.privateIpAddress`
 cidr1="$localip1/32"
 cidr2="$localip2/32"
-##open ports
 
 
-#Security_Group 
 
-echo " Creating security group ,, "
+echo " Opening ports for Instances in RDS .. "
 
 ##create_for_RDS
-aws ec2  create-security-group --description domain"$domain" --group-name "$domain"_sg  --vpc-id vpc-502fa02b > /dev/null
-sg_id=`aws ec2 describe-security-groups --group-name "$domain"_sg | jq -r .SecurityGroups[].GroupId`
+#aws ec2  create-security-group --description domain"$domain" --group-name "$domain"_sg  --vpc-id vpc-502fa02b > /dev/null
+#sg_id=`aws ec2 describe-security-groups --group-name "$domain"_sg | jq -r .SecurityGroups[].GroupId`
 ##open_ports_from_instances
 aws ec2 authorize-security-group-ingress --group-id $sg_id --protocol tcp --port 3306 --cidr $cidr1
 aws ec2 authorize-security-group-ingress --group-id $sg_id --protocol tcp --port 3306 --cidr $cidr2
 
 
 
-#RDS 
 
-echo " Creating RDS instance ,,it will take about 5 minutes "
 
-db_name="$id"db
-rds_name="$id"rds
-aws rds create-db-instance --db-name "$id"db --db-instance-identifier  "$id"rds --allocated-storage 20 --db-instance-class db.t2.micro --engine mysql --master-username root --master-user-password $mysql_root_passwd --vpc-security-group-ids $sg_id --availability-zone us-east-1a > /dev/null
-#sleep 350
-echo "Checking for DB instance ... still creating "
-dbstatus=`aws rds describe-db-instances --db-instance-identifier "$id"rds | jq -r .DBInstances[].DBInstanceStatus`
-while  [ "$dbstatus" != "available" ]  ; do
-dbstatus=`aws rds describe-db-instances --db-instance-identifier "$id"rds | jq -r .DBInstances[].DBInstanceStatus`
-sleep 2
-done
-echo "Checking for DB instance ... Done!"
-rds_endpoint=`aws rds describe-db-instances --db-instance-identifier "$id"rds | jq -r .DBInstances[].Endpoint.Address`
-#rds_endpoint=$rds_name".c9hbae3b9azs.us-east-1.rds.amazonaws.com"
-aws_arn=`aws rds describe-db-instances --db-instance-identifier "$id"rds | jq -r .DBInstances[].DBInstanceArn`
-aws rds add-tags-to-resource --resource-name $aws_arn --tags Key=client,Value="$domain" > /dev/null
-aws rds add-tags-to-resource --resource-name $aws_arn --tags Key=creation_date,Value="$date" > /dev/null
+#db_name="$id"db
+#rds_name="$id"rds
+#aws rds create-db-instance --db-name "$id"db --db-instance-identifier  "$id"rds --allocated-storage 20 --db-instance-class db.t2.micro --engine mysql --master-username root --master-user-password $mysql_root_passwd --vpc-security-group-ids $sg_id --availability-zone us-east-1a > /dev/null
+##sleep 350
+#echo "Checking for DB instance ... still creating "
+#dbstatus=`aws rds describe-db-instances --db-instance-identifier "$id"rds | jq -r .DBInstances[].DBInstanceStatus`
+#while  [ "$dbstatus" != "available" ]  ; do
+#dbstatus=`aws rds describe-db-instances --db-instance-identifier "$id"rds | jq -r .DBInstances[].DBInstanceStatus`
+#sleep 2
+#done
+#echo "Checking for DB instance ... Done!"
+#rds_endpoint=`aws rds describe-db-instances --db-instance-identifier "$id"rds | jq -r .DBInstances[].Endpoint.Address`
+##rds_endpoint=$rds_name".c9hbae3b9azs.us-east-1.rds.amazonaws.com"
+#aws_arn=`aws rds describe-db-instances --db-instance-identifier "$id"rds | jq -r .DBInstances[].DBInstanceArn`
+#aws rds add-tags-to-resource --resource-name $aws_arn --tags Key=client,Value="$domain" > /dev/null
+#aws rds add-tags-to-resource --resource-name $aws_arn --tags Key=creation_date,Value="$date" > /dev/null
 
 
 
 
 #Attach_Static_IP
 
-echo " Attaching Static IP address ,, "
-
-aws lightsail attach-static-ip --static-ip-name "$domain"_ip1  --instance-name "$domain"_inst1 > /dev/null
-aws lightsail attach-static-ip --static-ip-name "$domain"_ip2  --instance-name "$domain"_inst2 > /dev/null
-staticip1=`aws lightsail get-static-ip --static-ip-name "$domain"_ip1 | jq -r .staticIp.ipAddress`
-staticip2=`aws lightsail get-static-ip --static-ip-name "$domain"_ip2 | jq -r .staticIp.ipAddress`
+#echo " Attaching Static IP address ,, "
+#
+#aws lightsail attach-static-ip --static-ip-name "$domain"_ip1  --instance-name "$domain"_inst1 > /dev/null
+#aws lightsail attach-static-ip --static-ip-name "$domain"_ip2  --instance-name "$domain"_inst2 > /dev/null
+#staticip1=`aws lightsail get-static-ip --static-ip-name "$domain"_ip1 | jq -r .staticIp.ipAddress`
+#staticip2=`aws lightsail get-static-ip --static-ip-name "$domain"_ip2 | jq -r .staticIp.ipAddress`
 
 
 
@@ -131,7 +143,7 @@ aws elbv2 add-tags --resource-arns $lb_arn --tags Key=creation_date,Value="$date
 
 # S3
 
-echo "Creating S3 Bucket and attaching default bucket policy ,,"
+echo " Creating S3 Bucket and attaching default bucket policy .."
 sleep 5
 s3="$id"bucket
 aws s3api create-bucket --bucket $s3 --region us-east-1 > /dev/null
@@ -143,13 +155,13 @@ aws s3api put-bucket-tagging --bucket $s3 --tagging 'TagSet=[{Key=client,Value='
 
 #IAM
 
-echo "creating IAM User"
+echo " Creating IAM User .."
 sleep 5
 aws iam create-user --user-name $id"user" > /dev/null
 iam_secret=`aws iam create-access-key --user-name "$id"user | jq -r .AccessKey.SecretAccessKey`
 iam_access=`aws iam list-access-keys --user-name "$id"user  | jq -r .AccessKeyMetadata[].AccessKeyId`
 
-echo " Allowing write access to the user on the S3 bucket ,, "
+echo " Allowing write access to the user on the S3 bucket .. "
 sleep 5
 cp /usr/bin/userpolicy.json /usr/bin/userpolicy_"$id".json
 sed -i "s/bucket1/${s3}/g" /usr/bin/userpolicy_"$id".json
@@ -157,12 +169,35 @@ policy_arn=`aws iam create-policy --policy-name "$id"-policy --policy-document f
 aws iam attach-user-policy --policy-arn $policy_arn --user-name $id"user" > /dev/null
 
 
+echo " Attaching Static IP address .. "
+
+
+aws lightsail attach-static-ip --static-ip-name "$domain"_ip1  --instance-name "$domain"_inst1 > /dev/null
+aws lightsail attach-static-ip --static-ip-name "$domain"_ip2  --instance-name "$domain"_inst2 > /dev/null
+staticip1=`aws lightsail get-static-ip --static-ip-name "$domain"_ip1 | jq -r .staticIp.ipAddress`
+staticip2=`aws lightsail get-static-ip --static-ip-name "$domain"_ip2 | jq -r .staticIp.ipAddress`
+
+
+echo " Back to check up on RDS creation, Checking .. "
+dbstatus=`aws rds describe-db-instances --db-instance-identifier "$id"rds | jq -r .DBInstances[].DBInstanceStatus`
+while  [ "$dbstatus" != "available" ]  ; do
+dbstatus=`aws rds describe-db-instances --db-instance-identifier "$id"rds | jq -r .DBInstances[].DBInstanceStatus`
+sleep 2
+done
+echo "Done!"
+rds_endpoint=`aws rds describe-db-instances --db-instance-identifier "$id"rds | jq -r .DBInstances[].Endpoint.Address`
+#rds_endpoint=$rds_name".c9hbae3b9azs.us-east-1.rds.amazonaws.com"
+aws_arn=`aws rds describe-db-instances --db-instance-identifier "$id"rds | jq -r .DBInstances[].DBInstanceArn`
+aws rds add-tags-to-resource --resource-name $aws_arn --tags Key=client,Value="$domain" > /dev/null
+aws rds add-tags-to-resource --resource-name $aws_arn --tags Key=creation_date,Value="$date" > /dev/null
+
 #cloudfront
 
 #echo "Configuring cloudfront ,,"
 #sleep 3
 #aws cloudfront create-distribution --origin-domain-name $s3.s3.amazonaws.com > /dev/null
 
+echo "Configuring Instamces .."
 
 
 ###############
